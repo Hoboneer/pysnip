@@ -1,2 +1,4 @@
 parso
 fs
+black
+pip-tools
