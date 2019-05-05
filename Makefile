@@ -17,6 +17,11 @@ refresh-deps:
 compile-deps:
 	@pip-compile --generate-hashes
 
+.PHONY: compile-deps-dev
+# Pin versions of packages specified in `requirements-dev.in`.
+compile-deps-dev:
+	@pip-compile --generate-hashes requirements-dev.in
+
 .PHONY: sync-deps
 # Sync site packages with versions in `requirements.txt`.
 sync-deps:
