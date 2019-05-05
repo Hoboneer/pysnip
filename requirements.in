@@ -2,3 +2,6 @@ parso
 fs
 black
 pip-tools
+mypy
+flake8
+isort
