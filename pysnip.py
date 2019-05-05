@@ -1,9 +1,20 @@
 #!/usr/bin/env python
 import argparse
-from itertools import chain
+import re
+from contextlib import suppress
 
 import fs
-import parso
+
+from pyfs import PyCodeFS
+
+# TODO: Match duplicate files when given an identifier to match.
+
+# FIXME: The problem of the code treating local files as the identifier...
+# Perhaps just make user do it? This only affects multiple files as args
+# anyway.  Checking `identifier` for being a valid python identifer wouldn't
+# work since `--regex` changes its meaning...
+
+# TODO: Support setting the separator after each match.
 
 
 def get_parser():
@@ -14,77 +25,131 @@ def get_parser():
         "-s",
         "--scope",
         default=".",
-        help="the dotted scopes containing the identifiers to find",
+        # Allow a nicer name in the code.
+        dest="path",
+        type=get_scopes,
+        help="the dotted scopes containing the identifiers to find (default: top-level/module scope)",
     )
     parser.add_argument(
         "-t",
         "--type",
-        default=None,
-        help="the type of statement (e.g., classdef)",
+        action="append",
+        choices=("classdef", "funcdef"),
+        help="the type of statement (e.g., a class definition)",
+    )
+    parser.add_argument(
+        "-R",
+        "--recursive",
+        action="store_true",
+        help="find `identifier` in specified scope and all subscopes",
+    )
+    parser.add_argument(
+        "-r",
+        "--regex",
+        action="store_true",
+        default=False,
+        help="find code that match a regular expression, specified by `identifier`",
     )
     parser.add_argument("identifier", help="the identifier to search for")
     # The files are searched as if they are the root of the scopes.
-    # Any imports will be followed (?).
+    # Any imports will be followed (?) (TODO).
     parser.add_argument(
-        "files", nargs="+", help="files to search in separately"
+        "files",
+        nargs="+",
+        help="files to search in separately",
+        type=argparse.FileType("r"),
     )
 
     return parser
 
 
-def get_scopes(dotted_name):
+IDENTIFIER_PATT = re.compile("[A-Za-z_][A-Za-z0-9_]*")
+
+
+def get_scopes(dotted_name: str) -> str:
+    # Special-case top-level scope.
     if dotted_name == ".":
-        return []
-    return dotted_name.split(".")
+        return "/"
+
+    parts = dotted_name.split(".")
+    for part in parts:
+        if not IDENTIFIER_PATT.fullmatch(part):
+            raise argparse.ArgumentTypeError(
+                f"'{part}' is an invalid python identifier"
+            )
+    return fs.path.join(*parts)
 
 
-def match_scopes(scope_ident, scopes):
-    # Returns the nearest `Scope` that has the name `scope`.
-    for scope in scopes:
-        if scope.name.value == scope_ident:
-            return scope
-    raise NotImplementedError("TODO: error handling for `match_scopes`")
-
-
-def find_ident_in_scope(program, identifier, scopes, type_):
-    # Returns code of identifier(s) found in correct scope.
-
-    # Visit every node to get to specified scope.
-    code_path = program
-    if len(scopes) > 0:
-        for scope in scopes:
-            funcdefs = code_path.iter_funcdefs()
-            classdefs = code_path.iter_classdefs()
-            code_path = match_scopes(scope, chain(funcdefs, classdefs))
-
-    if type_ == "classdef":
-        defs = code_path.iter_classdefs()
-    elif type_ == "funcdef":
-        defs = code_path.iter_funcdefs()
-    else:
-        # No type specified.
-        classdefs = code_path.iter_classdefs()
-        funcdefs = code_path.iter_funcdefs()
-        defs = chain(classdefs, funcdefs)
-
-    for ident_def in defs:
-        if ident_def.name.value == identifier:
-            yield ident_def.get_code(include_prefix=False)
+def scope_name_to_path(
+    filesystem, scope_path, valid_types=("classdef", "funcdef")
+):
+    # Try get a valid filesystem path from a scope name (adds ".c" and scope type).
+    for scope_type in valid_types:
+        possible_path = f"{scope_path}.{scope_type}.c"
+        if filesystem.exists(f"{scope_path}.{scope_type}.c"):
+            return possible_path
+    raise fs.errors.ResourceNotFound(possible_path)
 
 
 if __name__ == "__main__":
     parser = get_parser()
     args = parser.parse_args()
-
-    scopes = get_scopes(args.scope)
     programs = []
-    with fs.open_fs(".") as disk:
-        for file in args.files:
-            programs.append(parso.parse(disk.gettext(file)))
+
+    for file_obj in args.files:
+        try:
+            programs.append(PyCodeFS(file_obj.read()))
+        except fs.errors.FSError:
+            raise NotImplementedError("TODO: handle invalid file inputs")
+        finally:
+            file_obj.close()
+
+    # The stdlib doesn't have 'necessarily inclusive'-type groups...
+    if args.regex and args.identifier is None:
+        raise NotImplementedError(
+            "TODO: handle invalid option combination (regex but no identifier)"
+        )
+
+    if args.regex:
+        regex = re.compile(args.identifier)
+
+    # Empty `--type` arg means all types.
+    if args.type is None:
+        args.type = ["classdef", "funcdef"]
+
+    # Make file patterns for walker.
+    if args.regex or args.identifier is None:
+        # Regex will be matched later OR all members of specified scope types will
+        # be included.
+        file_patterns = [f"*.{scope_type}" for scope_type in args.type]
+    else:
+        # Otherwise match literally
+        file_patterns = [
+            f"{args.identifier}.{scope_type}" for scope_type in args.type
+        ]
+
+    if args.recursive:
+        recursion_depth = None
+    else:
+        recursion_depth = 1
 
     for program in programs:
-        code_texts = find_ident_in_scope(
-            program, args.identifier, scopes, args.type
-        )
-        for code in code_texts:
-            print(code)
+        # Skip programs if they don't have the specified scopes.
+        with suppress(fs.errors.ResourceNotFound):
+            # Root directory is already valid.
+            if args.recursive and args.path != "/":
+                path = scope_name_to_path(program, args.path)
+            else:
+                path = args.path
+
+            for code_filename in program.walk.files(
+                path, filter=file_patterns, max_depth=recursion_depth
+            ):
+                # Ignore the '.classdef' or '.funcdef' extension in match.
+                filename, _ = fs.path.splitext(fs.path.basename(code_filename))
+
+                # Skip if the basename (minus the extension) does not match regex.
+                if args.regex and not regex.match(filename):
+                    continue
+
+                print(program.gettext(code_filename))
