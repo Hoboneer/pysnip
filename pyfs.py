@@ -139,7 +139,7 @@ class PyCodeFS(FS):
         "supports_rename": False,
     }
 
-    def __init__(self, code_text: str, language_version: str = "3.6"):
+    def __init__(self, code_text: str, language_version: Optional[str] = None):
         super().__init__()
         self._program = parso.parse(code_text, version=language_version)
         paths_to_scopes = self._build_filesystem()
