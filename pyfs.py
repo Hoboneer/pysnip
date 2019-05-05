@@ -7,6 +7,12 @@ from parso.python.tree import Scope
 import fs
 from fs.base import FS
 from fs.info import Info
+from fs.errors import (
+    DirectoryExpected,
+    ResourceNotFound,
+    Unsupported,
+    FileExpected,
+)
 from fs import open_fs
 import parso
 
@@ -121,58 +127,31 @@ class PyCodeFS(FS):
         # The filesystem representation of the program.
         self._files = {}
 
-    def _build_filesystem(self):
+    def _build_filesystem(self) -> Filesystem:
         code_tree = self._program.get_root_node()
-        funcdefs = code_tree.iter_funcdefs()
-        classdefs = code_tree.iter_classdefs()
-        for scopedef in chain(funcdefs, classdefs):
-            extension = scopedef.type  # 'funcdef', or 'classdef'.
+        # Start at root directory (top-level/module scope)
+        paths_to_scopes = map_code_tree(code_tree, PurePosixPath("/"))
+        return paths_to_fs(paths_to_scopes)
 
+    def _get_file_at_path(
+        self, path: str
+    ) -> Optional[Tuple[PurePosixPath, Filesystem]]:
+        # Walk through `path` in filesystem.
+        path_obj = PurePosixPath(path)
+        current_level = self._filesystem
+        try:
+            for i, part in enumerate(path_obj.parts):
+                if part == "/":
+                    continue
+                current_level = current_level[part]
+        except KeyError:
+            return None
 
+        # At this point, a valid "file" should be stored in `current_level`.
+        resource = current_level
 
-    # Should the filesystem be prebuilt, such that the code can assume the
-    # filesystem is complete? (make it work then make it work fast!)
-
-    def _path_to_scopes(self, path):
-        # Converts some filesystem path to list of scopes.
-        if path == "/":
-            return []
-        scopes = path.split("/")
-        return scopes
-
-    def _match_scopes(self, scope_ident, scopes):
-        # Returns the nearest `Scope` that has the name `scope`.
-        for scope in scopes:
-            if scope.name.value == scope_ident:
-                return scope
-        raise NotImplementedError("TODO: error handling for `match_scopes`")
-
-    def _find_ident_in_scope(self, identifier, scopes, type_=None):
-        # Returns parso tree of identifier(s) found in correct scope.
-
-        # Visit every node to get to specified scope. Empty `scopes` means the toplevel scope is checked.
-        code_path = self._program
-        if len(scopes) > 0:
-            for scope in scopes:
-                funcdefs = code_path.iter_funcdefs()
-                classdefs = code_path.iter_classdefs()
-                code_path = self._match_scopes(
-                    scope, chain(funcdefs, classdefs)
-                )
-
-        if type_ == "classdef":
-            defs = code_path.iter_classdefs()
-        elif type_ == "funcdef":
-            defs = code_path.iter_funcdefs()
-        else:
-            # No type specified.
-            classdefs = code_path.iter_classdefs()
-            funcdefs = code_path.iter_funcdefs()
-            defs = chain(classdefs, funcdefs)
-
-        for ident_def in defs:
-            if ident_def.name.value == identifier:
-                yield ident_def
+        filesystem = (path_obj, resource)
+        return filesystem
 
     def getinfo(self, path, namespaces=None):
         # TODO: Support namespaces other than 'basic'.
@@ -185,20 +164,55 @@ class PyCodeFS(FS):
                 raise NotImplementedError(
                     "TODO: What to do about unsupported namespaces?"
                 )
-        *scopes, ident_and_type = self._path_to_scopes(path)
-        identifier, type_ = ident_and_type.split(".")
-        # Get the first one found.
-        definition = next(
-            self._find_ident_in_scope(identifier, scopes, type_), None
-        )
-        if definition is None:
-            raise NotImplementedError(
-                "TODO: Implement handling of not-found definition"
-            )
 
-        raw_info = {"basic": {"name": identifier, "is_dir": False}}
+        file_query = self._get_file_at_path(path)
+        if file_query is None:
+            raise ResourceNotFound(path)
+        path_obj, resource = file_query
+
+        raw_info = {
+            "basic": {
+                # Special-case root-dir.
+                "name": "/" if path == "/" else path_obj.name,
+                "is_dir": path == "/"
+                or len(set((".d", ".c")) & set(path_obj.suffixes)) > 0,
+            }
+        }
         return Info(raw_info)
 
     def listdir(self, path):
+        info = self.getinfo(path)
+        if not info.is_dir:
+            raise DirectoryExpected(path)
+        file_query = self._get_file_at_path(path)
+        assert file_query is not None
+        path_obj, resource = file_query
+        local_files = [filename for filename in resource.keys()]
+        return local_files
 
-        pass
+    def makedir(self, path, permissions=None, recreate=False):
+        raise Unsupported(msg="cannot modify pyfs")
+
+    def openbin(self, path, mode="r", buffering=-1, **options):
+        info = self.getinfo(path)
+        if not info.is_file:
+            raise FileExpected(path)
+        if "w" in mode:
+            raise Unsupported(msg="cannot modify pyfs")
+        if "x" in mode:
+            raise Unsupported(msg="cannot get exclusive control of resource")
+        file_query = self._get_file_at_path(path)
+        assert file_query is not None
+        _, resource = file_query
+        return BytesIO(
+            bytes(cast(Scope, resource).get_code(include_prefix=False), encoding="utf-8")
+        )
+
+    def remove(self, path):
+        raise Unsupported(msg="cannot modify pyfs")
+
+    def removedir(self, path):
+        raise Unsupported(msg="cannot modify pyfs")
+
+    def setinfo(self, path, info):
+        raise Unsupported(msg="cannot modify pyfs")
