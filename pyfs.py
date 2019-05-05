@@ -180,6 +180,7 @@ class PyCodeFS(FS):
     def getinfo(
         self, path: str, namespaces: Optional[Collection[str]] = None
     ) -> Info:
+        path = self.validatepath(path)
         # TODO: Support namespaces other than 'basic'.
         if namespaces is None:
             namespaces = ["basic"]
@@ -206,6 +207,7 @@ class PyCodeFS(FS):
         return Info(raw_info)
 
     def listdir(self, path: str) -> List[str]:
+        path = self.validatepath(path)
         info = self.getinfo(path)
         if not info.is_dir:
             raise DirectoryExpected(path)
@@ -224,6 +226,7 @@ class PyCodeFS(FS):
     def openbin(
         self, path: str, mode: str = "r", buffering: int = -1, **options: Any
     ) -> BinaryIO:
+        path = self.validatepath(path)
         info = self.getinfo(path)
         if not info.is_file:
             raise FileExpected(path)
