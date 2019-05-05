@@ -139,7 +139,12 @@ class PyCodeFS(FS):
         "supports_rename": False,
     }
 
-    def __init__(self, code_text: str, include_prefix: bool = False, language_version: Optional[str] = None):
+    def __init__(
+        self,
+        code_text: str,
+        include_prefix: bool = False,
+        language_version: Optional[str] = None,
+    ):
         super().__init__()
         self._program = parso.parse(code_text, version=language_version)
         paths_to_scopes = self._build_filesystem()
@@ -238,7 +243,9 @@ class PyCodeFS(FS):
         _, resource = self._get_file_at_path(path)
         return BytesIO(
             bytes(
-                cast(Scope, resource).get_code(include_prefix=self._include_prefix),
+                cast(Scope, resource).get_code(
+                    include_prefix=self._include_prefix
+                ),
                 encoding="utf-8",
             )
         )
