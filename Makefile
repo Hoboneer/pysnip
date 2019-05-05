@@ -1,4 +1,4 @@
-SRC_FILES=pysnip.py
+SRC_FILES=pysnip.py pyfs.py
 
 # Max line length of 79 chars makes working in a vertically-split terminal
 # window easier.
