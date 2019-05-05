@@ -120,12 +120,10 @@ class PyCodeFS(FS):
         "supports_rename": False,
     }
 
-    def __init__(self, filename, language_version="3.6"):
+    def __init__(self, file_obj, language_version="3.6"):
         super().__init__()
-        with open_fs(filename) as fs:
-            self._program = parso.parse()
-        # The filesystem representation of the program.
-        self._files = {}
+        self._program = parso.parse(file_obj.read(), version=language_version)
+        self._filesystem: Filesystem = self._build_filesystem()
 
     def _build_filesystem(self) -> Filesystem:
         code_tree = self._program.get_root_node()
