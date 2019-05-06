@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import re
+import sys
 from contextlib import suppress
 
 import fs
@@ -54,10 +55,7 @@ def get_parser():
     # The files are searched as if they are the root of the scopes.
     # Any imports will be followed (?) (TODO).
     parser.add_argument(
-        "files",
-        nargs="+",
-        help="files to search in separately",
-        type=argparse.FileType("r"),
+        "files", nargs="+", help="files to search in separately"
     )
 
     return parser
@@ -94,15 +92,6 @@ def scope_name_to_path(
 if __name__ == "__main__":
     parser = get_parser()
     args = parser.parse_args()
-    programs = []
-
-    for file_obj in args.files:
-        try:
-            programs.append(PyCodeFS(file_obj.read()))
-        except fs.errors.FSError:
-            raise NotImplementedError("TODO: handle invalid file inputs")
-        finally:
-            file_obj.close()
 
     # The stdlib doesn't have 'necessarily inclusive'-type groups...
     if args.regex and args.identifier is None:
@@ -133,7 +122,20 @@ if __name__ == "__main__":
     else:
         recursion_depth = 1
 
-    for program in programs:
+    for filename in args.files:
+        try:
+            f = open(filename)
+            program = PyCodeFS(f.read())
+        except Exception:
+            # TODO: Allow exception to be logged.
+            print(
+                f"Could not open '{filename}' for some reason. Skipping...",
+                file=sys.stderr,
+            )
+            continue
+        finally:
+            f.close()
+
         # Skip programs if they don't have the specified scopes.
         with suppress(fs.errors.ResourceNotFound):
             # Root directory is already valid.
