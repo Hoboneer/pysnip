@@ -122,8 +122,8 @@ if __name__ == "__main__":
 
     # Make file patterns for walker.
     if args.regex or args.identifier is None:
-        # Regex will be matched later OR all members of specified scope types will
-        # be included.
+        # Regex will be matched later OR all members of specified scope types
+        # will be included.
         file_patterns = [f"*.{scope_type}" for scope_type in args.type]
     else:
         # Otherwise match literally
@@ -169,7 +169,7 @@ if __name__ == "__main__":
                 # Ignore the '.classdef' or '.funcdef' extension in match.
                 filename, _ = fs.path.splitext(fs.path.basename(code_filename))
 
-                # Skip if the basename (minus the extension) does not match regex.
+                # Skip if the basename (minus extension) does not match regex.
                 if args.regex and not regex.match(filename):
                     continue
 
