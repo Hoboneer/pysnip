@@ -4,7 +4,7 @@ SRC_FILES=pysnip.py pyfs.py
 # window easier.
 BLACK_FLAGS=--line-length=79 --py36
 CTAGS_FLAGS=--languages=Python
-ISORT_FLAGS=--atomic
+ISORT_FLAGS=--atomic --multi-line=3 --trailing-comma
 
 .PHONY: refresh-deps
 # This is very ugly. Please make it conform better to Makefile conventions.
