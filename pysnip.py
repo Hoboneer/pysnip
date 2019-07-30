@@ -3,8 +3,10 @@ import argparse
 import re
 import sys
 from contextlib import suppress
+from typing import Iterable
 
 import fs
+from fs.base import FS
 
 from pyfs import PyCodeFS
 
@@ -86,8 +88,10 @@ def get_scopes(dotted_name: str) -> str:
 
 
 def scope_name_to_path(
-    filesystem, scope_path, valid_types=("classdef", "funcdef")
-):
+    filesystem: FS,
+    scope_path: str,
+    valid_types: Iterable[str] = ("classdef", "funcdef"),
+) -> str:
     # Try get a valid filesystem path from a scope name (adds ".c" and scope type).
     for scope_type in valid_types:
         possible_path = f"{scope_path}.{scope_type}.c"
