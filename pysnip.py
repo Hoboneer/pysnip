@@ -51,6 +51,14 @@ def get_parser():
         default=False,
         help="find code that match a regular expression, specified by `identifier`",
     )
+    # XXX: Perhaps this should be named "--delimiter" ("-d" short option) instead?
+    parser.add_argument(
+        "-S",
+        "--separator",
+        # This gets properly escaped later.
+        default="\\n",
+        help='separate matches with a sequence of characters (default: newline, "\\n")',
+    )
     parser.add_argument("identifier", help="the identifier to search for")
     # The files are searched as if they are the root of the scopes.
     # Any imports will be followed (?) (TODO).
@@ -122,6 +130,11 @@ if __name__ == "__main__":
     else:
         recursion_depth = 1
 
+    # Convert escape sequences to real characters (e.g., "\n" to newline char).
+    output_separator = bytes(args.separator, encoding="utf-8").decode(
+        "unicode-escape"
+    )
+
     for filename in args.files:
         try:
             f = open(filename)
@@ -154,4 +167,4 @@ if __name__ == "__main__":
                 if args.regex and not regex.match(filename):
                     continue
 
-                print(program.gettext(code_filename))
+                print(program.gettext(code_filename), end=output_separator)
