@@ -117,6 +117,9 @@ if __name__ == "__main__":
     if args.type is None:
         args.type = ["classdef", "funcdef"]
 
+    # Remove duplicate types.
+    args.type = set(args.type)
+
     # Make file patterns for walker.
     if args.regex or args.identifier is None:
         # Regex will be matched later OR all members of specified scope types will
