@@ -68,7 +68,7 @@ def get_parser():
     return parser
 
 
-IDENTIFIER_PATT = re.compile("[A-Za-z_][A-Za-z0-9_]*")
+IDENTIFIER_PATT = re.compile("^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def get_scopes(dotted_name: str) -> str:
@@ -91,7 +91,7 @@ def scope_name_to_path(
     # Try get a valid filesystem path from a scope name (adds ".c" and scope type).
     for scope_type in valid_types:
         possible_path = f"{scope_path}.{scope_type}.c"
-        if filesystem.exists(f"{scope_path}.{scope_type}.c"):
+        if filesystem.exists(possible_path):
             return possible_path
     raise fs.errors.ResourceNotFound(possible_path)
 
