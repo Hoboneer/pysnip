@@ -20,7 +20,7 @@ from pyfs import PyCodeFS
 
 def get_parser():
     parser = argparse.ArgumentParser(
-        description="get snippets of Python code in the command line"
+        description="Get snippets of Python code in the command line."
     )
     parser.add_argument(
         "-s",
@@ -36,7 +36,7 @@ def get_parser():
         "--type",
         action="append",
         choices=("classdef", "funcdef"),
-        help="the type of statement (e.g., a class definition)",
+        help="the type of statement, may be specified multiple times",
     )
     parser.add_argument(
         "-R",
@@ -48,8 +48,7 @@ def get_parser():
         "-r",
         "--regex",
         action="store_true",
-        default=False,
-        help="find code that match a regular expression, specified by `identifier`",
+        help="search with regular expressions",
     )
     # XXX: Perhaps this should be named "--delimiter" ("-d" short option) instead?
     parser.add_argument(
